@@ -1,0 +1,62 @@
+API CALL:
+http://patient-access-api-gb-02272023.us-e1.cloudhub.io/patientaccess?patient=49006&claim=49043
+http://localhost:8091/patientaccess?patient=49006&claim=49029
+
+Postman Path:
+FHIR/POC-CarinBB
+
+Sample Data:
+ 
+1.Patient: 
+49006
+
+2.claim:
+49043
+49272
+49029 --> no Pharmacy details
+49155
+49033 --> no Pharmacy details
+49064
+49187
+49052
+49294
+49172
+49169
+49057
+49085
+49071
+49078
+49092
+49203
+49436
+49312
+49433
+49326
+
+Assumptions made:
+1. For a given patient and claim, there will be only one EOB
+2. 
+
+
+
+FHIR Data 
+API SPecification 
+patient - EOB 
+FHIR calls / Postman 
+Mapping 
+Display Field 
+
+use Case 1
+
+1. Start with patient umid/ssn 
+2 . Call EOB with patient id and claim id 
+3. transform the o/p into json structure defined 
+
+Use case 2 
+
+
+Steps: 
+
+1. Retreive patient resources (id) with umid/SSN 
+
+
