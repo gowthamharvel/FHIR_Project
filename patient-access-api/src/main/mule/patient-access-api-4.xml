@@ -1,0 +1,136 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
+	<flow name="patient-access-api-4Flow" doc:id="5aa0a5b9-9d6d-42a4-b5d7-28a8d9305b91" >
+		<http:listener doc:name="Listener" doc:id="1d2a55c1-4d34-4a08-9db1-ec7242c5916d" config-ref="HTTP_Listener_config" path="/patientacesss4"/>
+		<set-variable value="#[message.attributes.queryParams.patient]" doc:name="Set Variable" doc:id="5992002d-504e-4288-a4fd-3f54d8a1db2e" variableName="patientID"/>
+		<http:request method="GET" doc:name="Request - EOB" doc:id="c8ddc7f4-38aa-48c9-bcdb-7ca6f09e3e5a" config-ref="HTTP_Request_configuration" path="/baseR4/ExplanationOfBenefit" target="result">
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : vars.patientID
+}]]]></http:query-params>
+		</http:request>
+		<flow-ref doc:name="To Pagination flow" doc:id="8cd9ecca-29b5-4e76-8cd8-c21cc676476f" name="Pagination-of-Resources-4" target="eob"/>
+		<choice doc:name="Choice" doc:id="a99d1ed8-4fdb-4e8d-ad7b-919322b20f01" >
+			<when expression="#[!isEmpty(flatten(vars.eob.*entry).resource)]">
+				<parallel-foreach doc:name="Parallel For Each" doc:id="aef6b5cd-df56-4b5e-9139-306d0e4e0d4f" collection="#[flatten(vars.eob.*entry).resource]">
+					<scatter-gather doc:name="Scatter-Gather" doc:id="0fb1b524-e52b-4e18-a376-04f85adcee5f" >
+						<route >
+							<flow-ref doc:name="Get CaseManagement Flow" doc:id="337c7390-46e2-46f3-ad82-fa42247692d9" name="get-case-Management-Flow" target="caseManagement"/>
+						</route>
+						<route >
+							<flow-ref doc:name="get Providers flow" doc:id="dfdc5187-e0ee-483d-91f1-79bb612104d7" name="get-providers-flow" target="providers"/>
+						</route>
+					</scatter-gather>
+					<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	"providers": vars.providers,&#10;	"caseManagement": vars.caseManagement&#10;}]' doc:name="Set Payload" doc:id="75e29477-b79c-48da-adf8-125fad6987f2" />
+					<logger level="INFO" doc:name="Logger" doc:id="7a8581e8-da36-42ca-b671-0afed1515335" message="#[payload]"/>
+
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="37f6c348-2514-4d75-8aea-b99548c1fa67">
+					<ee:message>
+						<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+{
+"providers": payload..providers,
+"caseManagement": payload..caseManagement
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+		
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="only clinical flow" doc:id="d37a447e-5160-4ca2-9968-9cb2c290f8b1" message="only clinical data flow starts"/>
+				<http:request method="GET" doc:name="Request-encounter" doc:id="7e4f0139-f806-4b56-9bd9-ecd171640f38" config-ref="HTTP_Request_configuration" path="/baseR4/Encounter" target="encounter" >
+					<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : vars.patientID
+}]]]></http:query-params>
+				</http:request>
+				<choice doc:name="Choice" doc:id="f34cb8ca-7bab-4c56-8ff3-b708b817fc10" >
+					<when expression="#[!isEmpty(flatten(vars.encounter.*entry).resource)]">
+						<flow-ref doc:name="Flow Reference - Only Clinical data " doc:id="bde1f24d-94ce-41e1-8986-a483350c743c" name="get-clinical-flowFlow"/>
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="7b6cb3e6-0979-4ffb-987b-09b7a7b27881" message="only Patient demographic values are available"/>
+					</otherwise>
+				</choice>
+			</otherwise>
+		</choice>
+	</flow>
+	<sub-flow name="Pagination-of-Resources-4" doc:id="35cbb913-4a1a-41a7-acfd-557c31b689a4" >
+		<set-variable value='#[(vars.result.link filter ((item) -&gt; item.relation == "next" )).url[0]]' doc:name="set Pagination URL" doc:id="b88bbc38-f96a-42c1-ae50-7f68039fa66b" variableName="nextURL"/>
+		
+		<logger level="INFO" doc:name="Logger" doc:id="0e2922f3-2265-4569-8b67-ad4713373c52" message="#[vars.nextURL]"/>
+		<choice doc:name="check if further pages exists" doc:id="b5b335c5-6ea4-4402-9308-15b2182bd255" >
+			<when expression='#[!isEmpty(vars.nextURL)]'>
+				<http:request method="GET" doc:name="Request" doc:id="3776d170-88cc-4868-b93e-4acf05cacb5f" config-ref="HTTP_Request_configuration" url="#[vars.nextURL]"/>
+				<ee:transform doc:name="Transform Message" doc:id="c7b6d880-0376-4b61-b327-d16697d4fe7a" >
+					<ee:message >
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="nextURL" ><![CDATA[(payload.link filter ((item) -> item.relation == "next" )).url[0] default "" ]]></ee:set-variable>
+						<ee:set-variable variableName="result" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.result ++ payload]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<flow-ref doc:name="Pagination-of-Resource" doc:id="5f6c645e-c875-4811-acdf-8190493c0ee0" name="Pagination-of-Resources"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="04eed616-a8ab-4da1-850f-1ffdbe722893" message="Pagination done"/>
+			</otherwise>
+		</choice>
+		<set-payload value="#[vars.result]" doc:name="Set Payload" doc:id="460d27b1-a3fd-4370-a552-e9891ce0699a" />
+	</sub-flow>
+	<sub-flow name="get-providers-flow" doc:id="cab546ef-c985-4c66-8864-d9e839629d2e" >
+		<http:request method="GET" doc:name="Request" doc:id="f9a745a2-1c1a-4e2e-a762-7b514b6e84b7" config-ref="HTTP_Request_configuration" path="baseR4/{id}" target="practitioner">
+			<http:uri-params ><![CDATA[#[output application/java
+---
+{
+	"id" : payload.provider.reference
+}]]]></http:uri-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="c5f854fc-896c-4f5f-a7d5-ad53066b0d35" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"provides": flatten(vars.practitioner.name.given) joinBy  " ",
+	"speciality": "",
+	"lastTreatmentDate": "",
+	"contactInfo": vars.practitioner.telecom.value joinBy  "/"
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	<sub-flow name="get-case-Management-Flow" doc:id="e5465320-5eb0-46c4-8528-89698fbfd800" >
+		<ee:transform doc:name="Transform Message" doc:id="1c2a4798-7620-40ab-84b7-cd54e242c545" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	"caseManager": "",
+	"program": "",
+	"startDate": "",
+	"endDate": "",
+	"contact": ""
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	
+	
+
+
+</mule>

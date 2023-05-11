@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:fhirr4eobapi="http://www.mulesoft.org/schema/mule/fhirr4eobapi"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/fhirr4eobapi http://www.mulesoft.org/schema/mule/fhirr4eobapi/current/mule-fhirr4eobapi.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:listener-config name="HTTP_Listener_config" doc:name="HTTP Listener config" doc:id="ed23684b-0041-421b-bacc-5a9f90a93b5b" >
+		<http:listener-connection host="0.0.0.0" port="8091" />
+	</http:listener-config>
+	<fhirr4eobapi:config name="FHIR_R4_EOB_API_Config" doc:name="FHIR R4 EOB API Config" doc:id="73067e87-b725-4e4f-89a8-a63f836f2103" property_host="hapi.fhir.org" property_port="443" property_protocol="HTTPS" property_basePath="/baseR4" />
+	<flow name="patient-access-apiFlow" doc:id="42d5bde7-ea25-4eea-97c5-9048460c4299" >
+		<http:listener doc:name="Listener" doc:id="fcc36bcc-2940-4024-a028-0ffdafe235c7" config-ref="HTTP_Listener_config" path="/patientaccess"/>
+		<fhirr4eobapi:get-patient-by-id doc:name="Get patient by id" doc:id="7cbc2657-7d6d-4e0a-9187-bfb616a9208f" config-ref="FHIR_R4_EOB_API_Config" id="#[message.attributes.queryParams.patient]" target="patient"/>
+		<fhirr4eobapi:get-explanation-of-benefits doc:name="Get explanation of benefits" doc:id="5bd7b162-4d67-4295-856e-bace653429f9" config-ref="FHIR_R4_EOB_API_Config" patientreference="#[message.attributes.queryParams.patient]" claimreference="#[message.attributes.queryParams.claim]" target="eob" targetValue="#[payload.entry.resource[0]]"/>
+		<fhirr4eobapi:get-encounter-by-id doc:name="Get encounter by id" doc:id="4dd1f2e9-29b9-4b43-89ee-3e48fad82bae" config-ref="FHIR_R4_EOB_API_Config" id="#[(vars.eob.item.encounter..reference[0] splitBy(/[.\/]/) )[1]]" target="encounter"/>
+		<scatter-gather doc:name="Scatter-Gather" doc:id="cbcca7a2-7633-43e2-9005-d3d38514c454" >
+			<route >
+				<fhirr4eobapi:get-organization-by-id doc:name="Get organization by id" doc:id="376d87e0-568e-4f28-adf8-e8770aaeb81c" config-ref="FHIR_R4_EOB_API_Config" id="#[(vars.encounter.serviceProvider.reference splitBy(/[.\/]/))[1]]" target="organization" />
+			</route>
+			<route >
+				<fhirr4eobapi:get-practitioner-by-id doc:name="Get practitioner by id" doc:id="fdc26181-ed28-4b7e-910d-69a3b354e896" config-ref="FHIR_R4_EOB_API_Config" id="#[(vars.eob.provider.reference splitBy(/[.\/]/) )[1]]" target="practitioner" />
+			</route>
+			<route >
+				<fhirr4eobapi:get-medication-requests doc:name="Get medication requests" doc:id="c2bc2253-fbd9-4cd0-9d20-1b2b5a6dae8a" config-ref="FHIR_R4_EOB_API_Config" target="medicalrequest" encounterreference="#[vars.encounter.id]" />
+			</route>
+		</scatter-gather>
+		<logger level="INFO" doc:name="Logger" doc:id="8a6bcb25-5f5a-4e2c-bebd-09eb88eef655" message="#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	patient: vars.patient.id,&#10;	EOB: vars.eob.id,&#10;	encounter: vars.encounter.id,&#10;	organization: vars.organization.id,&#10;	practitioner: vars.practitioner.id,&#10;	MedicationRequest: vars.medicalrequest.entry.resource.id&#10;	&#10;}]"/>
+		<ee:transform doc:name="Transform Message" doc:id="584a2bb5-31b4-40e4-b7e3-87c7c90405fc" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	patient: {
+		DoB: vars.patient.birthDate,
+		Name: vars.encounter.subject.display
+	},
+	hospitalizations: vars.eob.item map ( item , indexOfItem ) -> {
+		facilityName: (item.locationCodeableConcept.coding.display)[0],
+		admitDate: item.servicedPeriod.start,
+		dischargeDate: item.servicedPeriod.end,
+		code: (item.productOrService.coding..code)[0],
+		diagnosis: (item.productOrService.coding.display)[0]
+	},
+	surgeries: [{
+		provider: vars.practitioner.name[0].given[0],
+		contactInfo: vars.practitioner.telecom.value[0]
+	}],
+	providers: vars.eob.careTeam map ( careTeam , indexOfCareTeam ) -> {
+		provider: vars.practitioner.name[0].given[0],
+		speciality: careTeam.role.coding.display[0],
+		contactInfo: vars.practitioner.telecom.value[0]
+	},
+	pharmacy: flatten(vars.medicalrequest.entry.resource map ((medicalrequest, index) -> medicalrequest.medicationCodeableConcept.coding map ((i2) -> {
+	    medication: i2.display,
+	    category: i2.code,
+	    dosage: medicalrequest.dosageInstruction.sequence[0],
+	    lastFilledDate: null,
+		newPrescription: null
+} ))),
+	caseManagement: vars.eob.insurance map ( insurance , indexOfInsurance ) -> {
+		caseManager: insurance.coverage.display
+	}
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Transform Message" doc:id="76e10330-cb16-4476-bb60-ba85eee85475" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+	patient: payload.patient,
+	displayHospitalizations: !isEmpty((payload.hospitalizations map(obj,ind) -> 
+valuesOf(obj) joinBy  "") joinBy  "" ),
+	hospitalizations: payload.hospitalizations map ( hospitalization , indexOfHospitalization ) -> {
+		facilityName: hospitalization.facilityName,
+		admitDate: hospitalization.admitDate,
+		dischargeDate: hospitalization.dischargeDate,
+		code: hospitalization.code,
+		diagnosis: hospitalization.diagnosis
+	},
+	displaySurgeries: !isEmpty((payload.surgeries map(obj,ind) -> 
+valuesOf(obj) joinBy  "") joinBy  "" ),
+	surgeries: payload.surgeries map ( surgery , indexOfSurgery ) -> {
+		procedure: surgery.procedure,
+		procedureDate: surgery.procedureDate,
+		provider: surgery.provider,
+		contactInfo: surgery.contactInfo
+	},
+	displayProviders: !isEmpty((payload.providers map(obj,ind) -> 
+valuesOf(obj) joinBy  "") joinBy  "" ),
+	providers: payload.providers map ( provider , indexOfProvider ) -> {
+		provider: provider.provider,
+		speciality: provider.speciality,
+		lastTreatmentDate: provider.lastTreatmentDate,
+		contactInfo: provider.contactInfo
+	},
+	displayPharmacy: !isEmpty(payload.pharmacy map(obj,ind) -> obj ),
+	pharmacy: payload.pharmacy map ( pharmacy , indexOfPharmacy ) -> {
+		medication: pharmacy.medication,
+		category: pharmacy.category,
+		dosage: pharmacy.dosage,
+		lastFilledDate: null,
+		newPrescription: null
+	},
+	displayCaseMgmt: !isEmpty((payload.caseManagement map(obj,ind) -> 
+valuesOf(obj) joinBy  "") joinBy  ""),
+	caseManagement: payload.caseManagement map ( caseManagement , indexOfCaseManagement ) -> {
+		caseManager: caseManagement.caseManager,
+		program: null,
+		startDate: null,
+		endDate: null,
+		contact: null
+	},
+	clinicalNotes: payload.clinicalNotes
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+</mule>

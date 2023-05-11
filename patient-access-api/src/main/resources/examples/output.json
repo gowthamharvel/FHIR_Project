@@ -1,0 +1,83 @@
+{
+  "patient": {
+    "ssn": "123121234",
+    "umid": "nylid",
+    "DoB": "12-12-92",
+    "Name": "firstName lastName"
+  },
+  "displayHospitalizations": true,
+  "hospitalizations": [
+    {
+      "facilityName": "",
+      "admitDate": "",
+      "dischargeDate": "",
+      "code": "",
+      "diagnosis": ""
+    },
+    {
+      "facilityName": "",
+      "admitDate": "",
+      "dischargeDate": "",
+      "code": "",
+      "diagnosis": ""
+    }
+  ],
+  "displaySurgeries": true,
+  "surgeries": [
+    {
+      "procedure": "",
+      "procedureDate": "",
+      "provider": "",
+      "contactInfo": ""
+    },
+    {
+      "procedure": "",
+      "procedureDate": "",
+      "provider": "",
+      "contactInfo": ""
+    }
+  ],
+  "displayProviders": true,
+  "providers": [
+    {
+      "provider": "",
+      "speciality": "",
+      "lastTreatmentDate": "",
+      "contactInfo": ""
+    },
+    {
+      "provider": "",
+      "speciality": "",
+      "lastTreatmentDate": "",
+      "contactInfo": ""
+    }
+  ],
+  "displayPharmacy": true,
+  "pharmacy": [
+    {
+      "medication": "",
+      "category": "",
+      "dosage": "",
+      "lastFilledDate": "",
+      "newPrescription": false
+    },
+    {
+      "medication": "",
+      "category": "",
+      "dosage": "",
+      "lastFilledDate": "",
+      "newPrescription": true
+    }
+  ],
+   "displayCaseMgmt": true,
+  "caseManagement": [
+    {
+      "caseManager": "",
+      "program": "",
+      "startDate": "",
+      "endDate": "",
+      "contact": ""
+    }
+  ],
+  "clinicalNotes": ""
+}

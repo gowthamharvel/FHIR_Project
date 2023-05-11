@@ -1,0 +1,43 @@
+{
+  "resourceType": "MedicationRequest",
+  "id": "49401",
+  "meta": {
+    "versionId": "1",
+    "lastUpdated": "2019-10-18T20:20:56.872+00:00",
+    "source": "#ML8v9Ku1pGuXAhZr"
+  },
+  "status": "stopped",
+  "intent": "order",
+  "medicationCodeableConcept": {
+    "coding": [
+      {
+        "system": "http://www.nlm.nih.gov/research/umls/rxnorm",
+        "code": "895994",
+        "display": "120 ACTUAT Fluticasone propionate 0.044 MG/ACTUAT Metered Dose Inhaler"
+      }
+    ],
+    "text": "120 ACTUAT Fluticasone propionate 0.044 MG/ACTUAT Metered Dose Inhaler"
+  },
+  "subject": {
+    "reference": "Patient/49006"
+  },
+  "encounter": {
+    "reference": "Encounter/49383"
+  },
+  "authoredOn": "2018-04-30T20:27:01-04:00",
+  "requester": {
+    "reference": "Practitioner/49046",
+    "display": "Dr. Joi660 Funk324"
+  },
+  "reasonReference": [
+    {
+      "reference": "Condition/49036"
+    }
+  ],
+  "dosageInstruction": [
+    {
+      "sequence": 1,
+      "asNeededBoolean": true
+    }
+  ]
+}

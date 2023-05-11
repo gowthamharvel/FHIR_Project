@@ -1,0 +1,14 @@
+%dw 2.0
+
+type auto_cab546ef_c985_4c66_8864_d9e839629d2e_Input_Variables_hospitalization = Array<org_mule_runtime_api_message_Message>
+type org_mule_runtime_api_message_Message = {|
+  payload: Null | {|
+    facility: Any, 
+    admit: Any, 
+    discharge: Any
+  |}, 
+  attributes: Null
+|} {"typeId": "org.mule.runtime.api.message.Message"}
+
+
+

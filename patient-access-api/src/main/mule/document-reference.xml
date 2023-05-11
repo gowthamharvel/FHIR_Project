@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<http:request-config name="HTTP_Request_configuration" doc:name="HTTP Request configuration" doc:id="edba3c55-7333-401e-a82a-429a8e007c82" >
+		<http:request-connection host="hapi.fhir.org" />
+	</http:request-config>
+	<flow name="document-referenceFlow" doc:id="0b4c7cdb-5322-4e5a-8afe-c686ad3e4bfd" >
+		<http:listener doc:name="Listener" doc:id="5c72bf89-fa6a-479d-a9cb-52b3da653b87" config-ref="HTTP_Listener_config" path="/documentReference"/>
+		<http:request method="GET" doc:name="Request" doc:id="6c772250-3bc0-49af-b1a2-bdd31dddb671" config-ref="HTTP_Request_configuration" url="https://hapi.fhir.org/baseR4/DocumentReference" target="result">
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : message.attributes.queryParams.patient,
+	"type": message.attributes.queryParams.note
+}]]]></http:query-params>
+		</http:request>
+		<flow-ref doc:name="Flow Reference" doc:id="2f8dc68e-ea51-4955-b7f6-77c7237c1277" name="Pagination-of-Resources-4" target="documentReference"/>
+		<ee:transform doc:name="Transform Message" doc:id="3ac0b461-0bab-4ca3-aa2c-1b093c0ad878" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(vars.documentReference.entry.resource.content).attachment.data]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="7805275c-2dce-4bb2-b9e7-1145361f63c0" message="After Transforming DR : #[payload]"/>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="cae6d10f-c088-4593-80ed-0648f0fb69be" collection="#[payload]">
+			<ee:transform doc:name="Transform Message" doc:id="53a69cc7-9338-4986-af48-5ae976d72153" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+import * from dw::core::Binaries
+---
+write(fromBase64(payload),"text/plain")]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<logger level="INFO" doc:name="Logger" doc:id="cd84c2eb-b407-414a-a997-51322b61cbcf" message="#[payload]"/>
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="10faf7f1-1ca6-49f4-ae4e-d2321d278577" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload) joinBy("\n--------------\n")]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<logger level="INFO" doc:name="Logger" doc:id="1f6c2ae1-b824-4a18-b672-82f844337d22" message="#[payload]"/>
+	</flow>
+</mule>

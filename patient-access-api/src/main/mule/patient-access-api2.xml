@@ -1,0 +1,108 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core" xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core"
+	xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd">
+	<flow name="patient-access-api2Flow" doc:id="78a70afb-2cae-4275-b896-6fc902a6835d" >
+		<http:listener doc:name="Listener" doc:id="bc94733f-1216-4e09-9f4c-b118623a3776" config-ref="HTTP_Listener_config" path="/patientacesss2"/>
+	
+		<http:request method="GET" doc:name="Request - EOB" doc:id="138cbfc3-3e52-422d-8ca6-3883c8ec255a" config-ref="HTTP_Request_configuration" path="/baseR4/ExplanationOfBenefit" target="eob">
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : message.attributes.queryParams.patient
+}]]]></http:query-params>
+		</http:request>
+		<ee:transform doc:name="Transform Message" doc:id="d0304fe0-9963-43af-889e-cc5a982224e3" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(vars.eob..encounter).reference]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<flow-ref doc:name="Flow Reference - MedicationRequest" doc:id="f691b5f7-a885-4c6b-8ff7-99a2046e4270" name="get-pharmacy-information-from-patient" target="medicationRequest"/>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="fc0201ad-eaaf-46f0-b74b-28b21dac8920" collection="#[payload]">
+			<http:request method="GET" doc:name="Request-encounter" doc:id="2910984c-d029-4aa1-8580-e84edc58b54c" config-ref="HTTP_Request_configuration" path="#['/baseR4/' ++ payload as String]" target="encounter"/>
+			<parallel-foreach doc:name="Parallel For Each" doc:id="2d9705f9-3141-42a0-b2ff-a63cbfd0eb8f" collection="#[flatten(vars.encounter.participant).individual.reference]">
+				<choice doc:name="Choice" doc:id="d69f06fd-e5cc-4768-83a3-6d4992837ae3" >
+					<when expression="#[!isEmpty(payload)]">
+						<http:request method="GET" doc:name="Request-practitioner" doc:id="bfc8b6a0-6f2d-4355-8063-04931feb6861" config-ref="HTTP_Request_configuration" path="#['/baseR4/' ++ payload as String]" target="practitioner" />
+						<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	"facility": vars.encounter.serviceProvider.display,&#10;	"admit": vars.encounter.period.start,&#10;	"discharge": vars.encounter.period.end,&#10;	"practitioner": flatten(vars.practitioner.name.given) joinBy " "&#10;	&#10;}]' doc:name="Set Payload" doc:id="907dcd86-8df4-4b40-a4b6-71d3e3ab09f5" />
+					</when>
+					<otherwise >
+						<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	"facility": vars.encounter.serviceProvider.display,&#10;	"admit": vars.encounter.period.start,&#10;	"discharge": vars.encounter.period.end,&#10;	&#10;	&#10;}]' doc:name="Set Payload" doc:id="4c434f4d-51b2-4604-8daf-d1728116edad" />
+					</otherwise>
+				</choice>
+			</parallel-foreach>
+			<ee:transform doc:name="Transform Message" doc:id="b55fcea7-88ac-4c72-9fb6-168411715d66" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<logger level="INFO" doc:name="Logger" doc:id="7bdc4d2c-16e1-4a02-be22-e832e7d90be6" message="#[payload]"/>
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="2b6667d6-8847-4f7f-9768-2ae028008cc1" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+patient:
+	{
+		name: vars.patient.name.text joinBy " ",
+		Birthdate: vars.patient.birthdate
+	},
+hospitalization: flatten(payload..payload),
+PharmacyInformation: vars.medicationRequest
+
+}
+]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<sub-flow name="get-pharmacy-information-from-patient" doc:id="8a0e0b16-b7f5-450d-926d-98635a7c6676" >
+		<parallel-foreach doc:name="Parallel For Each" doc:id="590aaa49-f624-41c9-9b9d-dac9e6e459a3" collection="#[payload]">
+			<http:request method="GET" doc:name="Request - medicationRequest" doc:id="3621f663-5fd1-47cf-92d5-bfde3d717f18" config-ref="HTTP_Request_configuration" path="/baseR4/MedicationRequest" target="medicationRequest">
+				<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"encounter" : (payload splitBy  (/[.\/]/) )[1]
+}]]]></http:query-params>
+			</http:request>
+			<choice doc:name="Choice" doc:id="0d616956-f06e-4e91-a7cf-ac0add80a5bd" >
+				<when expression="#[!isEmpty(vars.medicationRequest.entry.resource)]">
+					<parallel-foreach doc:name="Parallel For Each" doc:id="0adbdf47-329e-410f-bb0c-23643139519f" collection="#[vars.medicationRequest.entry.resource]">
+				<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;payload.medicationCodeableConcept.coding map (medicationRequest, index) -&gt;&#10;{&#10;    medication: medicationRequest.display,&#10;    category: medicationRequest.code,&#10;    dosage: payload.dosageInstruction.text joinBy  "/",&#10;    lastFilledDate: payload.authoredOn,&#10;    newPrescription: null,&#10;}]' doc:name="Set Payload" doc:id="bc651b5e-73c2-4d55-9db2-0cc975b946e8" />
+						<logger level="INFO" doc:name="Logger" doc:id="d2ea22e0-3a82-4724-9c9b-bf27311ba2a9" message="#[payload]" />
+			</parallel-foreach>
+					<ee:transform doc:name="Transform Message" doc:id="e960bd6d-caa0-4558-a100-d593154eee5a">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="f3381879-8b2c-404b-b848-bef4acc35410" message="no medication requests"/>
+					<set-payload value='#[[]]' doc:name="Set Payload" doc:id="45d050a8-b4b2-488e-bb02-8f8a4a0dd2c0" />
+				</otherwise>
+			</choice>
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="801014c3-ce27-43ef-8f75-24186cd8bef4" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+</mule>

@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+	xsi:schemaLocation="
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd 
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd">
+	<flow name="get-clinical-flowFlow" doc:id="3d1aee3e-343e-433c-89e9-26e02840f83c" >
+		<logger level="INFO" doc:name="Logger" doc:id="40a20b16-fca2-4610-976d-f07265a45ff8" />
+		<flow-ref doc:name="Flow Reference - PharmacyInformation-flow" doc:id="91377431-7e91-4a62-867e-30228b66ceff" name="PharmacyInformation_flow" target="pharmacyInformation"/>
+		<parallel-foreach doc:name="Parallel For Each" doc:id="ffd59c99-5d43-4d7a-92fd-140b39c3aa7b" collection="#[vars.encounter.entry.resource]">
+			<set-variable value="#[payload]" doc:name="Set Variable" doc:id="ddfccf60-cf13-4767-9f10-a335018b0adb" variableName="encounter"/>
+			<parallel-foreach doc:name="Parallel For Each" doc:id="a843cc07-6d70-4e83-b248-bef5c4dc4173" collection="#[flatten(payload.participant).individual.reference]">
+				<choice doc:name="Choice" doc:id="98b67b3a-a53d-4945-9eb4-9b918ba3bc89" >
+					<when expression="#[!isEmpty(payload)]">
+						<http:request method="GET" doc:name="Request-practitioner" doc:id="5d24e476-f502-422e-ac24-a77d28bea3c0" config-ref="HTTP_Request_configuration" path="#['/baseR4/' ++ payload as String]" target="practitioner" />
+						<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	"facility": vars.encounter.serviceProvider.display,&#10;	"admit": vars.encounter.period.start,&#10;	"discharge": vars.encounter.period.end,&#10;	"practitioner": flatten(vars.practitioner.name.given) joinBy " "&#10;	&#10;}]' doc:name="Set Payload" doc:id="cbee2401-9adf-44f0-95b3-7a491479597a" />
+					</when>
+					<otherwise >
+						<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	"facility": vars.encounter.serviceProvider.display,&#10;	"admit": vars.encounter.period.start,&#10;	"discharge": vars.encounter.period.end,&#10;	&#10;	&#10;}]' doc:name="Set Payload" doc:id="fbfce855-27b1-471d-8659-b933a7f0183e" />
+					</otherwise>
+				</choice>
+			</parallel-foreach>
+			<ee:transform doc:name="Transform Message" doc:id="4847ae33-cf74-4b4d-a6bf-e70f314c5353" >
+				<ee:message >
+					<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+			<logger level="INFO" doc:name="Logger" doc:id="1bfde235-a1a7-4530-9955-f2e42bb54ed3" message="#[payload]"/>
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="cd9f2472-3a5d-47a6-a99b-80f6cb1d0a70" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+Hospitalization:flatten(payload..payload),
+PharmacyInformation: vars.pharmacyInformation
+
+}]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</flow>
+	<sub-flow name="PharmacyInformation_flow" doc:id="acb2498f-e882-4c67-a8b4-75ea78c80b21" >
+			<http:request method="GET" doc:name="Request - medicationRequest" doc:id="f8de2ae9-cc77-412c-ad66-c7ce9ce74a5a" config-ref="HTTP_Request_configuration" path="baseR4/MedicationRequest" target="medicationRequest">
+				<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : vars.patientID
+}]]]></http:query-params>
+			</http:request>
+		<choice doc:name="Choice" doc:id="2490e5c7-4323-425c-902e-4c7225ff9825" >
+				<when expression="#[!isEmpty(vars.medicationRequest.entry.resource)]">
+					<parallel-foreach doc:name="Parallel For Each" doc:id="fb80a4ef-87ea-4f49-8e5d-2ef8a2b7ede2" collection="#[vars.medicationRequest.entry.resource]">
+				<set-payload doc:name="Set Payload" doc:id="bde70cc9-21c4-4d7b-ac9c-5469d923f738" value='#[%dw 2.0&#10;output application/json&#10;---&#10;payload.medicationCodeableConcept.coding map (medicationRequest, index) -&gt;&#10;{&#10;    medication: medicationRequest.display,&#10;    category: medicationRequest.code,&#10;    dosage: payload.dosageInstruction.text joinBy  "/",&#10;    lastFilledDate: payload.authoredOn,&#10;    newPrescription: null,&#10;}]'/>
+						<logger level="INFO" doc:name="Logger" doc:id="06bc83c7-f742-4835-b1e6-d9a1e5858618" message="#[payload]" />
+			</parallel-foreach>
+				<ee:transform doc:name="Transform Message" doc:id="9dc52aea-7795-4302-a998-161a1c632c1f">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</when>
+				<otherwise >
+					<logger level="INFO" doc:name="Logger" doc:id="89c1a612-39f1-4424-9d1a-97435eb5c8cd" message="no medication requests"/>
+				</otherwise>
+			</choice>
+	</sub-flow>
+	
+</mule>

@@ -1,0 +1,172 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<mule xmlns:file="http://www.mulesoft.org/schema/mule/file" xmlns:ee="http://www.mulesoft.org/schema/mule/ee/core"
+	xmlns:http="http://www.mulesoft.org/schema/mule/http"
+	xmlns="http://www.mulesoft.org/schema/mule/core" xmlns:doc="http://www.mulesoft.org/schema/mule/documentation" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://www.mulesoft.org/schema/mule/core http://www.mulesoft.org/schema/mule/core/current/mule.xsd
+http://www.mulesoft.org/schema/mule/http http://www.mulesoft.org/schema/mule/http/current/mule-http.xsd
+http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/ee/core/current/mule-ee.xsd
+http://www.mulesoft.org/schema/mule/file http://www.mulesoft.org/schema/mule/file/current/mule-file.xsd">
+	<flow name="patient-access-api3Flow" doc:id="90704b38-2038-40c9-a575-f819d764a0de" >
+		<http:listener doc:name="Listener" doc:id="a1f1e823-3a6f-4252-bec7-f72bb3198c99" config-ref="HTTP_Listener_config" path="/patientacesss3"/>
+		<set-variable value="#[message.attributes.queryParams.patient]" doc:name="Set Variable" doc:id="9e3d3da5-1b8d-460e-828d-09f945d57c46" variableName="patientID"/>
+		<http:request method="GET" doc:name="Request - EOB" doc:id="15443020-38a1-441d-aeb5-6ed35cc531b9" config-ref="HTTP_Request_configuration" path="/baseR4/ExplanationOfBenefit" target="result">
+			<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : vars.patientID
+}]]]></http:query-params>
+		</http:request>
+		<set-variable value='#[(vars.result.link filter ((item) -&gt; item.relation == "next" )).url[0]]' doc:name="set Pagination URL" doc:id="64b3ba93-607b-43a6-a0f4-b557e0e3e6bd" variableName="nextURL"/>
+		<flow-ref doc:name="To Pagination flow" doc:id="b669f569-5f85-4e03-8e9f-7103940d3f06" name="Pagination-of-Resources" target="eob"/>
+		<choice doc:name="Choice" doc:id="16fbdc11-97e3-4415-a3af-e66f652d068d" >
+			<when expression="#[!isEmpty(flatten(vars.eob.*entry).resource)]">
+				<set-variable value="#[flatten(vars.eob..encounter).*reference]" doc:name="Set Variable" doc:id="40d9654f-bbbd-4e41-9d5b-2dc0cc34f33b" variableName="encounterList"/>
+				<flow-ref doc:name="Flow Reference - get-pharmacy-information-from-encounter-list" doc:id="65a9d17d-e517-4368-b00a-9a0902a5c930" name="get-pharmacy-information-from-encounter-list" target="pharmacyInformation" />
+				<parallel-foreach doc:name="Parallel For Each" doc:id="e9179fc4-d630-4342-a6dd-35b85e1ecabd" collection="#[vars.encounterList]" target="hospitalization">
+					<http:request method="GET" doc:name="Request-encounter" doc:id="f6b3f432-8fc3-402f-93b0-a7d6964bd5cd" config-ref="HTTP_Request_configuration" path="#['/baseR4/' ++ payload as String]" target="encounter"/>
+					<choice doc:name="Choice" doc:id="925871ca-1b98-42e0-ae26-325aa82ec970">
+					<when expression="#[!isEmpty(flatten(vars.encounter.participant).individual.reference)]">
+							<parallel-foreach doc:name="Parallel For Each" doc:id="18c950a9-e638-49ec-8b2b-1ddee7328052" collection="#[flatten(vars.encounter.participant).individual.reference]">
+						<http:request method="GET" doc:name="Request-practitioner" doc:id="afb9d613-a1c4-45fa-b59d-bfaf7b539737" config-ref="HTTP_Request_configuration" path="#['/baseR4/' ++ payload as String]" target="practitioner" />
+								<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;{&#10;	"facility": vars.encounter.serviceProvider.display,&#10;	"admit": vars.encounter.period.start,&#10;	"discharge": vars.encounter.period.end,&#10;	"practitioner": flatten(vars.practitioner.name.given) joinBy " "&#10;	&#10;}]' doc:name="Set Payload" doc:id="661d55e2-dfa5-46f4-ace7-922a978ea7b7" />
+			
+</parallel-foreach>
+							<ee:transform doc:name="Transform Message" doc:id="1333ff2d-2e6b-4c4b-be8d-1fbd52d54be9">
+				<ee:message>
+					<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+				</ee:message>
+			</ee:transform>
+					
+</when>
+						<otherwise>
+						<set-payload value='#[%dw 2.0
+output application/json
+---
+{
+	"facility": vars.encounter.serviceProvider.display,
+	"admit": vars.encounter.period.start,
+	"discharge": vars.encounter.period.end,
+}]' doc:name="Set Payload" doc:id="2ff5eb88-3fec-409e-9979-2078bfba3c85" />
+					</otherwise>
+				</choice>
+		</parallel-foreach>
+		<http:request method="GET" doc:name="Request-all encounter" doc:id="e80aa84a-b776-41d6-ac0d-45c57babb5a3" config-ref="HTTP_Request_configuration" path="/baseR4/Encounter" target="result" >
+					<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : vars.patientID
+}]]]></http:query-params>
+				</http:request>
+		<set-variable value='#[(vars.result.link filter ((item) -&gt; item.relation == "next" )).url[0] default ""]' doc:name="set Pagination URL" doc:id="24432e83-b600-4e2d-be84-569da1a67720" variableName="nextURL"/>
+		
+				<flow-ref doc:name="To Pagination flow" doc:id="64b081c2-b3fb-46b3-91f3-2c6b353251ff" name="Pagination-of-Resources" target="encounter"/>
+				<set-variable value="#[%dw 2.0
+output application/json
+---
+(flatten(vars.encounter.*entry).resource.id map (item)-&gt;('Encounter/' ++ item)) -- (flatten(vars.eob..encounter).*reference )]" doc:name="Set Variable" doc:id="27047011-a8a1-4da2-b9d6-9d2d368a8e61" variableName="uniqueEncounters"/>
+				<logger level="INFO" doc:name="Logger" doc:id="8768610c-2725-453a-b1b2-f87ab5e6ffc5" message="all Encounters in EOB: #[(flatten(vars.eob..encounter).*reference )]"/>
+				<logger level="INFO" doc:name="Logger" doc:id="0efe54cc-c401-4093-a35a-8dadf0629742" message="all Clinical Encounters: #[(flatten(vars.encounter.*entry).resource.id map (item)-&gt;('Encounter/' ++ item))]" />
+				<logger level="INFO" doc:name="Logger" doc:id="982c58e4-9345-48af-aa3b-0ef42a6d4854" message="Unique Encounters : #[vars.uniqueEncounters]"/>
+				<ee:transform doc:name="Transform Message" doc:id="9ea2133f-5f51-4a3b-b99c-fa238c18c2d9" >
+					<ee:message >
+						<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+{
+"hospitalization" : flatten(vars.hospitalization..payload),
+"PharmacyInformation": vars.pharmacyInformation
+}]]></ee:set-payload>
+					</ee:message>
+				</ee:transform>
+		
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="only clinical flow" doc:id="a4596599-6e5f-4a12-9919-b766445e2c3c" message="only clinical data flow starts"/>
+				<http:request method="GET" doc:name="Request-encounter" doc:id="44cbb51b-8f98-4088-ae5a-1384d28a3405" config-ref="HTTP_Request_configuration" path="/baseR4/Encounter" target="encounter" >
+					<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"patient" : vars.patientID
+}]]]></http:query-params>
+				</http:request>
+				<choice doc:name="Choice" doc:id="746b04fa-6248-43b4-afa9-c88bc5f336a1" >
+					<when expression="#[!isEmpty(flatten(vars.encounter.*entry).resource)]">
+						<flow-ref doc:name="Flow Reference - Only Clinical data " doc:id="505e2b03-cad6-4ec3-a72e-785cb808258d" name="get-clinical-flowFlow"/>
+					</when>
+					<otherwise >
+						<logger level="INFO" doc:name="Logger" doc:id="3d3b6a16-ee68-4937-ac00-ba5578eaec79" message="only Patient demographic values are available"/>
+					</otherwise>
+				</choice>
+			</otherwise>
+		</choice>
+	</flow>
+	<sub-flow name="Pagination-of-Resources" doc:id="2619e5c0-8207-4c77-9de3-caaf85591ada" >
+		<logger level="INFO" doc:name="Logger" doc:id="198088b6-cecc-4c3d-8991-b1fd40d4a704" message="#[vars.nextURL]"/>
+		<choice doc:name="check if further pages exists" doc:id="a644aa4e-076e-4cd9-b36f-32b7eff1e6f7" >
+			<when expression='#[!isEmpty(vars.nextURL)]'>
+				<http:request method="GET" doc:name="Request" doc:id="232782e3-65f9-4351-9327-a5a9d2a9c60f" config-ref="HTTP_Request_configuration" url="#[vars.nextURL]"/>
+				<ee:transform doc:name="Transform Message" doc:id="5a688720-411d-4fc4-8839-d63b1bab5c57" >
+					<ee:message >
+					</ee:message>
+					<ee:variables >
+						<ee:set-variable variableName="nextURL" ><![CDATA[(payload.link filter ((item) -> item.relation == "next" )).url[0] default "" ]]></ee:set-variable>
+						<ee:set-variable variableName="result" ><![CDATA[%dw 2.0
+output application/json
+---
+vars.result ++ payload]]></ee:set-variable>
+					</ee:variables>
+				</ee:transform>
+				<flow-ref doc:name="Pagination-of-Resource" doc:id="a8c31327-36ff-429b-a0f9-e00c32faa1f3" name="Pagination-of-Resources"/>
+			</when>
+			<otherwise >
+				<logger level="INFO" doc:name="Logger" doc:id="e87253b9-a09b-4b71-8b56-5e82e60e4534" message="Pagination done"/>
+			</otherwise>
+		</choice>
+		<set-payload value="#[vars.result]" doc:name="Set Payload" doc:id="f00e1c64-a4b2-47eb-ab05-fdba22e66963" />
+	</sub-flow>
+	
+	
+	<sub-flow name="get-pharmacy-information-from-encounter-list" doc:id="039174f4-af95-457a-bbac-14bd7a09941a" >
+		<parallel-foreach doc:name="Parallel For Each" doc:id="7d36961e-101c-4d4c-b00c-476ef8f03f05" collection="#[vars.encounterList]">
+			<http:request method="GET" doc:name="Request - medicationRequest" doc:id="bc7186eb-7177-4d7e-a8ad-bf22f7caa5ef" config-ref="HTTP_Request_configuration" path="/baseR4/MedicationRequest" target="medicationRequest">
+				<http:query-params ><![CDATA[#[output application/java
+---
+{
+	"encounter" : (payload splitBy  (/[.\/]/) )[1]
+}]]]></http:query-params>
+			</http:request>
+			<choice doc:name="Choice" doc:id="03e26979-819c-4757-9220-4b175805114b" >
+				<when expression="#[!isEmpty(vars.medicationRequest.entry.resource)]">
+					<parallel-foreach doc:name="Parallel For Each" doc:id="b80671fa-c83b-4d93-a6c2-fa25fb2b813b" collection="#[vars.medicationRequest.entry.resource]">
+				<set-payload value='#[%dw 2.0&#10;output application/json&#10;---&#10;payload.medicationCodeableConcept.coding map (medicationRequest, index) -&gt;&#10;{&#10;    medication: medicationRequest.display,&#10;    category: medicationRequest.code,&#10;    dosage: payload.dosageInstruction.text joinBy  "/",&#10;    lastFilledDate: payload.authoredOn,&#10;    newPrescription: null,&#10;}]' doc:name="Set Payload" doc:id="21bc1318-bfc0-41a5-a9b8-6f02583ad481" />
+			</parallel-foreach>
+					<ee:transform doc:name="Transform Message" doc:id="70fa312e-0a44-462e-954a-53b2e9ee05ef">
+						<ee:message>
+							<ee:set-payload><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+						</ee:message>
+					</ee:transform>
+				</when>
+				<otherwise >
+					<set-payload value='#[[]]' doc:name="Set Payload" doc:id="a812ff57-efe6-4cad-9022-7766dd0b1df7" />
+				</otherwise>
+			</choice>
+		</parallel-foreach>
+		<ee:transform doc:name="Transform Message" doc:id="0e22ca78-2a24-4df7-88f3-9c06dfc68cce" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+output application/json
+---
+flatten(payload..payload)]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+	</sub-flow>
+	
+	
+
+</mule>
