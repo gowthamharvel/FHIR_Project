@@ -1,62 +1,204 @@
-API CALL:
-http://patient-access-api-gb-02272023.us-e1.cloudhub.io/patientaccess?patient=49006&claim=49043
-http://localhost:8091/patientaccess?patient=49006&claim=49029
+http://localhost:8081/documentReference?patient=1545001&note=11488-4
 
-Postman Path:
-FHIR/POC-CarinBB
+https://hapi.fhir.org/baseR4/DocumentReference/1545031
+https://hapi.fhir.org/baseR4/DocumentReference?patient=1545001&type=11488-4
 
-Sample Data:
- 
-1.Patient: 
-49006
+flatten(payload.entry.resource.content).attachment.data 
 
-2.claim:
-49043
-49272
-49029 --> no Pharmacy details
-49155
-49033 --> no Pharmacy details
-49064
-49187
-49052
-49294
-49172
-49169
-49057
-49085
-49071
-49078
-49092
-49203
-49436
-49312
-49433
-49326
-
-Assumptions made:
-1. For a given patient and claim, there will be only one EOB
-2. 
+flatten(payload.*entry).resource
+flatten(payload.content).*attachment.data
 
 
+%dw 2.0
+import appendIfMissing from dw::core::Strings
+output application/json
 
-FHIR Data 
-API SPecification 
-patient - EOB 
-FHIR calls / Postman 
-Mapping 
-Display Field 
+---
+payload splitBy  (/\n+/) map ((item, index) -> 
 
-use Case 1
-
-1. Start with patient umid/ssn 
-2 . Call EOB with patient id and claim id 
-3. transform the o/p into json structure defined 
-
-Use case 2 
+     if(mod((index+1),10)  == 0) 
+       appendIfMissing(item,"\x0C")
+    else 
+        item
 
 
-Steps: 
+)
 
-1. Retreive patient resources (id) with umid/SSN 
+%dw 2.0
+import appendIfMissing from dw::core::Strings
+output application/json
 
 
+---
+payload splitBy  (/\n/) map ((item, index) -> 
+
+     if(mod((index+1),50)  == 0) 
+       appendIfMissing(item,"\x0C")
+    else 
+        item
+
+
+) joinBy  ("\n")
+
+%dw 2.0
+output application/json
+import * from dw::core::Binaries
+---
+write(fromBase64(payload),"text/plain")
+
+
+
+
+ {
+    "resourceType": "DocumentReference",
+    "id": "1494531",
+    "meta": {
+        "versionId": "13",
+        "lastUpdated": "2020-10-25T11:42:46.650+00:00",
+        "source": "#3ys0tkwDyE3uxPYB"
+    },
+    "text": {
+        "status": "generated",
+        "div": "<div xmlns=\"http://www.w3.org/1999/xhtml\"><p><b>Generated Narrative with Details</b></p><p><b>id</b>: example</p><p><b>contained</b>: </p><p><b>masterIdentifier</b>: urn:oid:1.3.6.1.4.1.21367.2005.3.7</p><p><b>identifier</b>: urn:oid:1.3.6.1.4.1.21367.2005.3.7.1234</p><p><b>status</b>: current</p><p><b>docStatus</b>: preliminary</p><p><b>type</b>: Outpatient Note <span>(Details : {LOINC code '34108-1' = 'Outpatient Note', given as 'Outpatient Note'})</span></p><p><b>category</b>: History and Physical <span>(Details : {http://ihe.net/xds/connectathon/classCodes code 'History and Physical' = 'History and Physical', given as 'History and Physical'})</span></p><p><b>subject</b>: <a>Patient/xcda</a></p><p><b>date</b>: 24/12/2005 9:43:41 AM</p><p><b>author</b>: </p><ul><li><a>Practitioner/xcda1</a></li><li>id: a2; Gerald Smitty </li></ul><p><b>authenticator</b>: <a>Organization/f001</a></p><p><b>custodian</b>: <a>Organization/f001</a></p><h3>RelatesTos</h3><table><tr><td>-</td><td><b>Code</b></td><td><b>Target</b></td></tr><tr><td>*</td><td>appends</td><td><a>DocumentReference/example</a></td></tr></table><p><b>description</b>: Physical</p><p><b>securityLabel</b>: very restricted <span>(Details : {http://terminology.hl7.org/CodeSystem/v3-Confidentiality code 'V' = 'very restricted', given as 'very restricted'})</span></p><h3>Contents</h3><table><tr><td>-</td><td><b>Attachment</b></td><td><b>Format</b></td></tr><tr><td>*</td><td/><td>History and Physical Specification (Details: urn:oid:1.3.6.1.4.1.19376.1.2.3 code urn:ihe:pcc:handp:2008 = 'urn:ihe:pcc:handp:2008', stated as 'History and Physical Specification')</td></tr></table><h3>Contexts</h3><table><tr><td>-</td><td><b>Encounter</b></td><td><b>Event</b></td><td><b>Period</b></td><td><b>FacilityType</b></td><td><b>PracticeSetting</b></td><td><b>SourcePatientInfo</b></td><td><b>Related</b></td></tr><tr><td>*</td><td><a>Encounter/xcda</a></td><td>Arm <span>(Details : {http://ihe.net/xds/connectathon/eventCodes code 'T-D8200' = 'T-D8200', given as 'Arm'})</span></td><td>23/12/2004 8:00:00 AM --&gt; 23/12/2004 8:01:00 AM</td><td>Outpatient <span>(Details : {http://www.ihe.net/xds/connectathon/healthcareFacilityTypeCodes code 'Outpatient' = 'Outpatient', given as 'Outpatient'})</span></td><td>General Medicine <span>(Details : {http://www.ihe.net/xds/connectathon/practiceSettingCodes code 'General Medicine' = 'General Medicine', given as 'General Medicine'})</span></td><td><a>Patient/xcda</a></td><td><a>Patient/xcda</a></td></tr></table></div>"
+    },
+    "masterIdentifier": {
+        "system": "urn:ietf:rfc:3986",
+        "value": "urn:oid:1.3.6.1.4.1.21367.2005.3.7"
+    },
+    "identifier": [
+        {
+            "system": "urn:ietf:rfc:3986",
+            "value": "urn:oid:1.3.6.1.4.1.21367.2005.3.7.1234111"
+        }
+    ],
+    "status": "current",
+    "docStatus": "amended",
+    "type": {
+        "coding": [
+            {
+                "system": "http://loinc.org",
+                "code": "11488-4",
+                "display": "Consult note"
+            }
+        ]
+    },
+    "category": [
+        {
+            "coding": [
+                {
+                    "system": "http://hl7.org/fhir/us/core/CodeSystem/us-core-documentreference-category",
+                    "code": "clinical-note",
+                    "display": "Clinical Note"
+                }
+            ]
+        }
+    ],
+    "subject": {
+        "reference": "Patient/1423796"
+    },
+    "date": "2005-10-24T09:43:41+11:00",
+    "author": [
+        {
+            "reference": "PractitionerRole/1423806"
+        },
+        {
+            "reference": "RelatedPerson/1479508"
+        }
+    ],
+    "authenticator": {
+        "reference": "Practitioner/1423320"
+    },
+    "custodian": {
+        "reference": "Organization/1423313"
+    },
+    "relatesTo": [
+        {
+            "code": "appends",
+            "target": {
+                "reference": "DocumentReference/1494530"
+            }
+        }
+    ],
+    "description": "Physical",
+    "securityLabel": [
+        {
+            "coding": [
+                {
+                    "system": "http://terminology.hl7.org/CodeSystem/v3-Confidentiality",
+                    "code": "V",
+                    "display": "very restricted"
+                }
+            ]
+        }
+    ],
+    "content": [
+        {
+            "attachment": {
+                "contentType": "application/hl7-v3+xml",
+                "language": "en-US",
+                "url": "http://example.org/xds/mhd/Binary/07a6483f-732b-461e-86b6-edb665c45510",
+                "size": 3654,
+                "hash": "2jmj7l5rSw0yVb/vlWAYkK/YBwk=",
+                "title": "Physical",
+                "creation": "2005-12-24T09:35:00+11:00"
+            },
+            "format": {
+                "system": "urn:oid:1.3.6.1.4.1.19376.1.2.3",
+                "code": "urn:ihe:pcc:handp:2008",
+                "display": "History and Physical Specification"
+            }
+        }
+    ],
+    "context": {
+        "encounter": [
+            {
+                "reference": "Encounter/1423815"
+            }
+        ],
+        "event": [
+            {
+                "coding": [
+                    {
+                        "system": "http://terminology.hl7.org/CodeSystem/v3-ActCode",
+                        "code": "DAY",
+                        "display": "Diner's Club"
+                    }
+                ]
+            }
+        ],
+        "period": {
+            "start": "2004-12-23T08:00:00+11:00",
+            "end": "2004-12-23T08:01:00+11:00"
+        },
+        "facilityType": {
+            "coding": [
+                {
+                    "system": "http://snomed.info/sct",
+                    "code": "42665001",
+                    "display": "Nursing home"
+                }
+            ]
+        },
+        "practiceSetting": {
+            "coding": [
+                {
+                    "system": "http://snomed.info/sct",
+                    "code": "408467006",
+                    "display": "Cardiology"
+                }
+            ]
+        },
+        "sourcePatientInfo": {
+            "reference": "Patient/1423796"
+        },
+        "related": [
+            {
+                "reference": "Patient/1423789",
+                "identifier": {
+                    "system": "urn:ietf:rfc:3986",
+                    "value": "urn:oid:1.3.6.1.4.1.21367.2005.3.7.2345"
+                }
+            }
+        ]
+    }
+}
