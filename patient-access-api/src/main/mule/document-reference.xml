@@ -10,10 +10,10 @@ http://www.mulesoft.org/schema/mule/ee/core http://www.mulesoft.org/schema/mule/
 	</http:request-config>
 	<flow name="document-referenceFlow" doc:id="0b4c7cdb-5322-4e5a-8afe-c686ad3e4bfd" >
 		<http:listener doc:name="Listener" doc:id="5c72bf89-fa6a-479d-a9cb-52b3da653b87" config-ref="HTTP_Listener_config" path="/documentReference"/>
-		<set-variable value='#[[&#10;  {&#10;    "code": "28570-0",&#10;    "display": "Procedure note"&#10;  },&#10;  {&#10;    "code": "11506-3",&#10;    "display": "Progress note"&#10;  },&#10;  {&#10;    "code": "57133-1",&#10;    "display": "Referral note"&#10;  },&#10;  {&#10;    "code": "11504-8",&#10;    "display": "Surgical operation note"&#10;  },&#10;  {&#10;    "code": "34746-8",&#10;    "display": "Nurse Note"&#10;  },&#10;  {&#10;    "code": "11488-4",&#10;    "display": "Consultation note"&#10;  },&#10;  {&#10;    "code": "18842-5",&#10;    "display": "Discharge summary"&#10;  },&#10;  {&#10;    "code": "34117-2",&#10;    "display": "History and physical note"&#10;  }&#10;]]' doc:name="Set Variable" doc:id="c26fe53e-b91a-49dc-8bac-8b3d09b6a388" variableName="clinicalNotes"/>
-		<set-variable value="#[message.attributes.queryParams.patient]" doc:name="Set Variable" doc:id="cd8de039-2096-4d77-b6c2-8378d5d7d4f2" variableName="id"/>
+		<set-variable value='#[[&#10;  {&#10;    "code": "28570-0",&#10;    "display": "Procedure note"&#10;  },&#10;  {&#10;    "code": "11506-3",&#10;    "display": "Progress note"&#10;  },&#10;  {&#10;    "code": "57133-1",&#10;    "display": "Referral note"&#10;  },&#10;  {&#10;    "code": "11504-8",&#10;    "display": "Surgical operation note"&#10;  },&#10;  {&#10;    "code": "34746-8",&#10;    "display": "Nurse Note"&#10;  },&#10;  {&#10;    "code": "11488-4",&#10;    "display": "Consultation note"&#10;  },&#10;  {&#10;    "code": "18842-5",&#10;    "display": "Discharge summary"&#10;  },&#10;  {&#10;    "code": "34117-2",&#10;    "display": "History and physical note"&#10;  }&#10;]]' doc:name="Set Clinical notes" doc:id="c26fe53e-b91a-49dc-8bac-8b3d09b6a388" variableName="clinicalNotes"/>
+		<set-variable value="#[message.attributes.queryParams.patient]" doc:name="Set Patient id" doc:id="cd8de039-2096-4d77-b6c2-8378d5d7d4f2" variableName="id"/>
 		<parallel-foreach doc:name="Parallel For Each" doc:id="cae6d10f-c088-4593-80ed-0648f0fb69be" collection="#[vars.clinicalNotes]">
-			<set-variable value="#[payload.display]" doc:name="Set Variable" doc:id="5c309b4a-f656-4530-8256-4745825f3afc" variableName="display"/>
+			<set-variable value="#[payload.display]" doc:name="Set Note Display" doc:id="5c309b4a-f656-4530-8256-4745825f3afc" variableName="display"/>
 			<try doc:name="Try" doc:id="7d17b194-03be-477a-a061-15f921d4af73" >
 				<http:request method="GET" doc:name="FHIR-Document Reference " doc:id="8447c66e-3552-4f45-bce6-6d00fcdab148" config-ref="HTTP_Request_configuration" path="/baseR4/DocumentReference" target="result">
 				<http:query-params><![CDATA[#[output application/java
@@ -43,7 +43,7 @@ write(fromBase64(payload),"text/plain")]]></ee:set-payload>
 							</ee:message>
 						</ee:transform>
 					</parallel-foreach>
-					<ee:transform doc:name="" doc:id="b0def12e-1e5c-46b0-8a76-7160b743a9dc" >
+					<ee:transform doc:name="Aggregate the data for the note in loop" doc:id="b0def12e-1e5c-46b0-8a76-7160b743a9dc" >
 						<ee:message >
 							<ee:set-payload ><![CDATA[%dw 2.0
 import prependIfMissing from dw::core::Strings
@@ -62,12 +62,33 @@ prependIfMissing(flatten(payload..payload) joinBy  "\n-----\n",vars.display)
 			</choice>
 			<logger level="INFO" doc:name="Logger" doc:id="cd84c2eb-b407-414a-a997-51322b61cbcf" message="#[payload]"/>
 		</parallel-foreach>
-		<ee:transform doc:name="Transform Message" doc:id="10faf7f1-1ca6-49f4-ae4e-d2321d278577" >
+		<ee:transform doc:name="Aggregate all the notes" doc:id="10faf7f1-1ca6-49f4-ae4e-d2321d278577" >
 			<ee:message >
 				<ee:set-payload ><![CDATA[%dw 2.0
 output application/json
 ---
-flatten(payload..payload)]]></ee:set-payload>
+
+(flatten(payload..payload) filter ((item, index) -> item != null)) joinBy "\n@@@\n"]]></ee:set-payload>
+			</ee:message>
+		</ee:transform>
+		<ee:transform doc:name="Add PageBreak" doc:id="e5cd3212-800b-460d-bc3e-0d2c4d57ed98" >
+			<ee:message >
+				<ee:set-payload ><![CDATA[%dw 2.0
+import appendIfMissing from dw::core::Strings
+output application/json
+
+
+---
+payload splitBy  (/\n/) map ((item, index) -> 
+
+     if(mod((index+1),25)  == 0) 
+       appendIfMissing(item,"\x0C")
+    else 
+        item
+
+
+) joinBy  ("\n")
+]]></ee:set-payload>
 			</ee:message>
 		</ee:transform>
 		<logger level="INFO" doc:name="Logger" doc:id="1f6c2ae1-b824-4a18-b672-82f844337d22" message="#[payload]"/>
