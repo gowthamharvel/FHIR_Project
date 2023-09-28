@@ -1,0 +1,5 @@
+#NOTE: This is a Maven Resolver internal implementation file, its format can be changed without prior notice.
+#Mon Sep 18 18:23:57 IST 2023
+mule-module-graphql-1.0.0-SNAPSHOT-extension-model-4.1.1.json>=
+mule-module-graphql-1.0.0-SNAPSHOT-mule-plugin.jar>=
+mule-module-graphql-1.0.0-SNAPSHOT.pom>=
